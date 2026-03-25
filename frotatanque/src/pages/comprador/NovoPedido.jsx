@@ -1,0 +1,392 @@
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { addDoc, collection, onSnapshot, serverTimestamp } from 'firebase/firestore'
+import { db } from '../../firebase/config'
+import { useAuth } from '../../context/AuthContext'
+import MapPicker from '../../components/MapPicker'
+import SearchableSelect from '../../components/SearchableSelect'
+import PageTitleWithHelp from '../../components/PageTitleWithHelp'
+import { toast } from 'react-toastify'
+import { PEDIDO_TIPO, PEDIDO_STATUS } from '../../constants/roles'
+import { reverseGeocodeLatLng } from '../../utils/reverseGeocode'
+
+const TIPO_PEDIDO_OPTIONS = [
+  { value: PEDIDO_TIPO.INSTALACAO, label: 'Instalação' },
+  { value: PEDIDO_TIPO.TROCA, label: 'Troca' },
+  { value: PEDIDO_TIPO.REMOCAO, label: 'Remoção' },
+  { value: PEDIDO_TIPO.MANUTENCAO, label: 'Manutenção' },
+]
+
+export default function NovoPedido() {
+  const { profile } = useAuth()
+  const navigate = useNavigate()
+  const [formStarted, setFormStarted] = useState(false)
+  const [tipoModal, setTipoModal] = useState(PEDIDO_TIPO.INSTALACAO)
+  const [producerName, setProducerName] = useState('')
+  const [region, setRegion] = useState('')
+  const [volumeLitros, setVolumeLitros] = useState('')
+  const [orderDate, setOrderDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [address, setAddress] = useState('')
+  const [lat, setLat] = useState(null)
+  const [lng, setLng] = useState(null)
+  const [tipoPedido, setTipoPedido] = useState(PEDIDO_TIPO.INSTALACAO)
+  const [notes, setNotes] = useState('')
+  const [producerCadastroId, setProducerCadastroId] = useState('')
+  const [produtores, setProdutores] = useState([])
+  const [saving, setSaving] = useState(false)
+  const [reverseGeoBusy, setReverseGeoBusy] = useState(false)
+
+  const isInstalacao = tipoPedido === PEDIDO_TIPO.INSTALACAO
+  const nomeRegiaoDoCadastro = !!producerCadastroId
+  const prevProducerCadastroRef = useRef(producerCadastroId)
+
+  useEffect(() => {
+    return onSnapshot(collection(db, 'produtores'), (s) =>
+      setProdutores(s.docs.map((d) => ({ id: d.id, ...d.data() }))),
+    )
+  }, [])
+
+  useEffect(() => {
+    if (!isInstalacao && !producerCadastroId) {
+      setProducerName('')
+      setRegion('')
+    }
+  }, [isInstalacao, producerCadastroId])
+
+  useEffect(() => {
+    const prev = prevProducerCadastroRef.current
+    prevProducerCadastroRef.current = producerCadastroId
+    if (producerCadastroId) {
+      const p = produtores.find((x) => x.id === producerCadastroId)
+      if (p) {
+        setProducerName(String(p.name || '').trim())
+        setRegion(String(p.region || '').trim())
+      }
+      return
+    }
+    if (prev && !producerCadastroId && isInstalacao) {
+      setProducerName('')
+      setRegion('')
+    }
+  }, [producerCadastroId, produtores, isInstalacao])
+
+  const producerOptionsInstalacao = [
+    { value: '', label: '— Sem ligação ao cadastro (só nome escrito) —' },
+    ...produtores.map((p) => ({
+      value: p.id,
+      label: `${p.name || p.id}${p.region ? ` · ${p.region}` : ''}`,
+    })),
+  ]
+
+  const producerOptionsCadastroObrigatorio = [
+    { value: '', label: '— Escolher produtor no cadastro Natville —' },
+    ...produtores.map((p) => ({
+      value: p.id,
+      label: `${p.name || p.id}${p.region ? ` · ${p.region}` : ''}`,
+    })),
+  ]
+
+  function onMapChange(la, ln) {
+    setLat(la)
+    setLng(ln)
+  }
+
+  const onGeolocationApplied = useCallback(async (la, ln) => {
+    setReverseGeoBusy(true)
+    try {
+      const addr = await reverseGeocodeLatLng(la, ln)
+      if (addr) setAddress(addr)
+    } finally {
+      setReverseGeoBusy(false)
+    }
+  }, [])
+
+  function continuarDepoisDoTipo() {
+    setTipoPedido(tipoModal)
+    setFormStarted(true)
+  }
+
+  function voltarAoTipo() {
+    setTipoModal(tipoPedido)
+    setFormStarted(false)
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    if (!profile?.id) return
+    if (!address.trim()) {
+      toast.error('Indique o endereço.')
+      return
+    }
+    if (!isInstalacao) {
+      if (!producerCadastroId) {
+        toast.error('Selecione o produtor no cadastro Natville.')
+        return
+      }
+    } else if (!producerCadastroId && !producerName.trim()) {
+      toast.error('Indique o nome do produtor ou selecione um produtor no cadastro.')
+      return
+    }
+    if (!region.trim()) {
+      toast.error('Indique a região do produtor.')
+      return
+    }
+    if (producerCadastroId) {
+      const p = produtores.find((x) => x.id === producerCadastroId)
+      if (!p) {
+        toast.error('O produtor selecionado já não está no cadastro. Escolha outro ou limpe a ligação.')
+        return
+      }
+    }
+    setSaving(true)
+    try {
+      await addDoc(collection(db, 'pedidos'), {
+        compradorId: profile.id,
+        producerName: producerName.trim(),
+        region: region.trim(),
+        volumeLitros: Number(volumeLitros) || 0,
+        orderDate,
+        address: address.trim(),
+        lat: lat ?? null,
+        lng: lng ?? null,
+        tipoPedido,
+        notes: notes.trim() || '',
+        status: PEDIDO_STATUS.ABERTO,
+        tanqueId: null,
+        producerId: producerCadastroId || null,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        editHistory: [],
+        lastCompradorEditAt: null,
+      })
+      toast.success('Pedido criado com sucesso.')
+      navigate('/comprador')
+    } catch {
+      toast.error('Não foi possível guardar o pedido.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="relative mx-auto max-w-3xl space-y-6">
+      <div>
+        <PageTitleWithHelp title="Novo pedido" tooltipId="help-comprador-novo-pedido">
+          <p>
+            <strong>Instalação</strong> costuma ser um <strong>novo produtor</strong>: pode escrever o nome ou escolher
+            alguém já no cadastro Natville. <strong>Troca, remoção e manutenção</strong> referem-se a produtores já
+            registados — deve escolher sempre o produtor no cadastro. O <strong>gestor</strong> vê o pedido em aberto e
+            pode montar o romaneio; o <strong>eletricista</strong> usa o mapa, o endereço e as{' '}
+            <strong>notas do comprador</strong> no terreno. O endereço é obrigatório; ao usar a localização atual,
+            tentamos preencher o endereço automaticamente (OpenStreetMap).
+          </p>
+        </PageTitleWithHelp>
+        <p className="mt-2 text-slate-600">
+          Primeiro escolha o <strong>tipo de pedido</strong>; depois preencha os restantes campos.
+        </p>
+      </div>
+
+      {!formStarted && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="novo-pedido-tipo-titulo"
+        >
+          <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-xl">
+            <h2 id="novo-pedido-tipo-titulo" className="text-lg font-semibold text-slate-900">
+              Tipo de pedido
+            </h2>
+            <p className="mt-2 text-sm text-slate-600">
+              Defina se é uma <strong>nova instalação</strong> ou um serviço num produtor já acompanhado (troca, remoção
+              ou manutenção). O formulário adapta-se ao que escolher.
+            </p>
+            <div className="mt-4">
+              <label className="text-sm font-medium text-slate-700">Tipo *</label>
+              <SearchableSelect
+                value={tipoModal}
+                onChange={setTipoModal}
+                options={TIPO_PEDIDO_OPTIONS}
+                placeholder="Tipo de pedido"
+                title="Tipo de pedido"
+                className="mt-1"
+              />
+            </div>
+            <div className="mt-6 flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={continuarDepoisDoTipo}
+                className="rounded-lg bg-blue-600 px-5 py-2.5 font-semibold text-white hover:bg-blue-700"
+              >
+                Continuar
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate('/comprador')}
+                className="rounded-lg border border-slate-300 px-5 py-2.5 text-slate-700 hover:bg-slate-50"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {formStarted && (
+        <form onSubmit={handleSubmit} className="space-y-5 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
+            <p className="text-sm text-slate-700">
+              <span className="font-medium">Tipo:</span>{' '}
+              {TIPO_PEDIDO_OPTIONS.find((o) => o.value === tipoPedido)?.label || tipoPedido}
+            </p>
+            <button
+              type="button"
+              onClick={voltarAoTipo}
+              className="text-sm font-medium text-blue-800 underline"
+            >
+              Alterar tipo de pedido
+            </button>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <label className="text-sm font-medium text-slate-700">
+                Produtor no cadastro Natville{isInstalacao ? ' (recomendado)' : ' *'}
+              </label>
+              <SearchableSelect
+                value={producerCadastroId}
+                onChange={setProducerCadastroId}
+                options={isInstalacao ? producerOptionsInstalacao : producerOptionsCadastroObrigatorio}
+                placeholder={isInstalacao ? '— Opcional —' : '— Escolher —'}
+                title="Produtor no cadastro Natville"
+                className="mt-1"
+              />
+              <p className="mt-1 text-xs text-slate-500">
+                {isInstalacao
+                  ? 'Ajuda a associar automaticamente o tanque ao produtor em frota e histórico.'
+                  : 'Obrigatório para troca, remoção e manutenção — nome e região vêm do cadastro.'}
+              </p>
+            </div>
+
+            {isInstalacao ? (
+              <div className="sm:col-span-2">
+                <label className="text-sm font-medium text-slate-700">Nome do produtor *</label>
+                <input
+                  required={!producerCadastroId}
+                  readOnly={nomeRegiaoDoCadastro}
+                  value={producerName}
+                  onChange={(e) => setProducerName(e.target.value)}
+                  className={`mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 ${
+                    nomeRegiaoDoCadastro ? 'cursor-not-allowed bg-slate-100 text-slate-800' : ''
+                  }`}
+                  title={
+                    nomeRegiaoDoCadastro
+                      ? 'Preenchido automaticamente a partir do cadastro Natville.'
+                      : undefined
+                  }
+                />
+                {nomeRegiaoDoCadastro ? (
+                  <p className="mt-1 text-xs text-slate-500">
+                    Definido pelo cadastro — altere trocando a seleção acima.
+                  </p>
+                ) : (
+                  <p className="mt-1 text-xs text-slate-500">
+                    Obrigatório se não escolher produtor no cadastro.
+                  </p>
+                )}
+              </div>
+            ) : null}
+
+            <div>
+              <label className="text-sm font-medium text-slate-700">Região do produtor *</label>
+              <input
+                required
+                readOnly={nomeRegiaoDoCadastro || !isInstalacao}
+                value={region}
+                onChange={(e) => setRegion(e.target.value)}
+                className={`mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 ${
+                  nomeRegiaoDoCadastro || !isInstalacao ? 'cursor-not-allowed bg-slate-100 text-slate-800' : ''
+                }`}
+                title={
+                  nomeRegiaoDoCadastro || !isInstalacao
+                    ? 'Preenchido automaticamente a partir do cadastro Natville.'
+                    : undefined
+                }
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-slate-700">Volume do tanque (litros) *</label>
+              <input
+                required
+                type="number"
+                min={0}
+                value={volumeLitros}
+                onChange={(e) => setVolumeLitros(e.target.value)}
+                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-slate-700">Data do pedido *</label>
+              <input
+                required
+                type="date"
+                value={orderDate}
+                onChange={(e) => setOrderDate(e.target.value)}
+                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="text-sm font-medium text-slate-700">Endereço *</label>
+              <input
+                required
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
+              />
+              {reverseGeoBusy ? (
+                <p className="mt-1 text-xs text-slate-500">A obter morada a partir do mapa…</p>
+              ) : null}
+            </div>
+            <div className="sm:col-span-2">
+              <label className="text-sm font-medium text-slate-700">Localização no mapa (opcional)</label>
+              <p className="mb-2 text-xs text-slate-500">
+                Ao abrir, pedimos a sua localização para aproximar o mapa. Pode ajustar clicando no mapa ou em &quot;Usar
+                a minha localização&quot; — quando usar a localização, tentamos preencher o endereço acima.
+              </p>
+              <MapPicker lat={lat} lng={lng} onChange={onMapChange} onGeolocationApplied={onGeolocationApplied} />
+              <p className="mt-2 text-xs text-slate-600">
+                {lat != null && lng != null ? `Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)}` : 'Sem coordenadas'}
+              </p>
+            </div>
+            <div className="sm:col-span-2">
+              <label className="text-sm font-medium text-slate-700">Notas do comprador</label>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={3}
+                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
+                placeholder="Instruções para o eletricista, acesso à propriedade, referências…"
+              />
+            </div>
+          </div>
+          <div className="flex gap-3">
+            <button
+              type="submit"
+              disabled={saving}
+              className="rounded-lg bg-blue-600 px-5 py-2.5 font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+            >
+              {saving ? 'A enviar…' : 'Enviar pedido'}
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('/comprador')}
+              className="rounded-lg border border-slate-300 px-5 py-2.5 text-slate-700 hover:bg-slate-50"
+            >
+              Cancelar
+            </button>
+          </div>
+        </form>
+      )}
+    </div>
+  )
+}

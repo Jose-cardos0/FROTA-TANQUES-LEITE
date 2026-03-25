@@ -1,0 +1,39 @@
+@import "tailwindcss";
+@import "leaflet/dist/leaflet.css";
+
+/* Mobile: área segura (iPhone com notch / home indicator) */
+.safe-pb {
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
+}
+
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Leaflet em ecrãs pequenos */
+.leaflet-container {
+  touch-action: manipulation;
+  min-height: 12rem;
+}
+
+/* divIcon — marcadores coloridos no mapa de pedidos (gestor) */
+.gestor-pedidos-dot-marker {
+  background: transparent !important;
+  border: none !important;
+}
+
+/* Toastify — sucesso alinhado à marca azul */
+.Toastify__toast-theme--colored.Toastify__toast--success {
+  background: rgb(37 99 235);
+}
+.Toastify__progress-bar--success {
+  background: rgb(29 78 216);
+}
+
+@media (max-width: 639px) {
+  .Toastify__toast-container {
+    width: 100%;
+    padding-left: max(0.5rem, env(safe-area-inset-left, 0px));
+    padding-right: max(0.5rem, env(safe-area-inset-right, 0px));
+  }
+}

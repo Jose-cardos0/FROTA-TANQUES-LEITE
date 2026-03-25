@@ -1,0 +1,10 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Desenvolvimento: qualquer utilizador autenticado lê/escreve.
+    // Em produção, restrinja por coleção e por role (ex.: só gestor cria users).
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
