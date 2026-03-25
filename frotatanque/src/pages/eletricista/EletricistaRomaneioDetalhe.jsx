@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   doc,
@@ -124,6 +124,55 @@ export default function EletricistaRomaneioDetalhe() {
       cancelled = true
     }
   }, [id, profile?.id])
+
+  const statusCards = useMemo(() => {
+    const list = romaneio?.itens || []
+    const counts = {}
+    for (const it of list) {
+      const st = edits[it.id]?.status ?? it.status
+      counts[st] = (counts[st] || 0) + 1
+    }
+    const cards = [
+      { id: 'all', label: 'Todos', count: list.length, style: 'border-slate-200 bg-slate-50 text-slate-800' },
+      {
+        id: ITEM_ROMANEIO_STATUS.PENDENTE,
+        label: ITEM_ROMANEIO_STATUS_LABELS[ITEM_ROMANEIO_STATUS.PENDENTE],
+        count: counts[ITEM_ROMANEIO_STATUS.PENDENTE] || 0,
+        style: 'border-amber-200 bg-amber-50 text-amber-900',
+      },
+      {
+        id: ITEM_ROMANEIO_STATUS.EM_ANDAMENTO,
+        label: ITEM_ROMANEIO_STATUS_LABELS[ITEM_ROMANEIO_STATUS.EM_ANDAMENTO],
+        count: counts[ITEM_ROMANEIO_STATUS.EM_ANDAMENTO] || 0,
+        style: 'border-blue-200 bg-blue-50 text-blue-900',
+      },
+      {
+        id: ITEM_ROMANEIO_STATUS.CONCLUIDO,
+        label: ITEM_ROMANEIO_STATUS_LABELS[ITEM_ROMANEIO_STATUS.CONCLUIDO],
+        count: counts[ITEM_ROMANEIO_STATUS.CONCLUIDO] || 0,
+        style: 'border-green-200 bg-green-50 text-green-900',
+      },
+      {
+        id: ITEM_ROMANEIO_STATUS.INCOMPLETO_REAGENDAR,
+        label: ITEM_ROMANEIO_STATUS_LABELS[ITEM_ROMANEIO_STATUS.INCOMPLETO_REAGENDAR],
+        count: counts[ITEM_ROMANEIO_STATUS.INCOMPLETO_REAGENDAR] || 0,
+        style: 'border-amber-200 bg-amber-50 text-amber-900',
+      },
+      {
+        id: ITEM_ROMANEIO_STATUS.CANCELADO,
+        label: ITEM_ROMANEIO_STATUS_LABELS[ITEM_ROMANEIO_STATUS.CANCELADO],
+        count: counts[ITEM_ROMANEIO_STATUS.CANCELADO] || 0,
+        style: 'border-red-200 bg-red-50 text-red-900',
+      },
+    ]
+    return cards
+  }, [romaneio?.itens, edits])
+
+  const itensFiltrados = useMemo(() => {
+    const list = romaneio?.itens || []
+    if (statusFilter === 'all') return list
+    return list.filter((it) => (edits[it.id]?.status ?? it.status) === statusFilter)
+  }, [romaneio?.itens, edits, statusFilter])
 
   function setEdit(itemId, field, value) {
     setEdits((prev) => ({
@@ -303,55 +352,6 @@ export default function EletricistaRomaneioDetalhe() {
 
   const { total, feitos, concluidosInstalacao } = romaneioProgress(romaneio.itens)
   const prazoRomaneioAtrasado = romaneioUltrapassouPrazo(romaneio)
-
-  const statusCards = useMemo(() => {
-    const list = romaneio?.itens || []
-    const counts = {}
-    for (const it of list) {
-      const st = edits[it.id]?.status ?? it.status
-      counts[st] = (counts[st] || 0) + 1
-    }
-    const cards = [
-      { id: 'all', label: 'Todos', count: list.length, style: 'border-slate-200 bg-slate-50 text-slate-800' },
-      {
-        id: ITEM_ROMANEIO_STATUS.PENDENTE,
-        label: ITEM_ROMANEIO_STATUS_LABELS[ITEM_ROMANEIO_STATUS.PENDENTE],
-        count: counts[ITEM_ROMANEIO_STATUS.PENDENTE] || 0,
-        style: 'border-amber-200 bg-amber-50 text-amber-900',
-      },
-      {
-        id: ITEM_ROMANEIO_STATUS.EM_ANDAMENTO,
-        label: ITEM_ROMANEIO_STATUS_LABELS[ITEM_ROMANEIO_STATUS.EM_ANDAMENTO],
-        count: counts[ITEM_ROMANEIO_STATUS.EM_ANDAMENTO] || 0,
-        style: 'border-blue-200 bg-blue-50 text-blue-900',
-      },
-      {
-        id: ITEM_ROMANEIO_STATUS.CONCLUIDO,
-        label: ITEM_ROMANEIO_STATUS_LABELS[ITEM_ROMANEIO_STATUS.CONCLUIDO],
-        count: counts[ITEM_ROMANEIO_STATUS.CONCLUIDO] || 0,
-        style: 'border-green-200 bg-green-50 text-green-900',
-      },
-      {
-        id: ITEM_ROMANEIO_STATUS.INCOMPLETO_REAGENDAR,
-        label: ITEM_ROMANEIO_STATUS_LABELS[ITEM_ROMANEIO_STATUS.INCOMPLETO_REAGENDAR],
-        count: counts[ITEM_ROMANEIO_STATUS.INCOMPLETO_REAGENDAR] || 0,
-        style: 'border-amber-200 bg-amber-50 text-amber-900',
-      },
-      {
-        id: ITEM_ROMANEIO_STATUS.CANCELADO,
-        label: ITEM_ROMANEIO_STATUS_LABELS[ITEM_ROMANEIO_STATUS.CANCELADO],
-        count: counts[ITEM_ROMANEIO_STATUS.CANCELADO] || 0,
-        style: 'border-red-200 bg-red-50 text-red-900',
-      },
-    ]
-    return cards
-  }, [romaneio?.itens, edits])
-
-  const itensFiltrados = useMemo(() => {
-    const list = romaneio?.itens || []
-    if (statusFilter === 'all') return list
-    return list.filter((it) => (edits[it.id]?.status ?? it.status) === statusFilter)
-  }, [romaneio?.itens, edits, statusFilter])
 
   return (
     <div className="space-y-6">
