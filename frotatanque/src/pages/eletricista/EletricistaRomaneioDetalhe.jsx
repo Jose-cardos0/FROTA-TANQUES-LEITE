@@ -14,7 +14,8 @@ import { useAuth } from '../../context/AuthContext'
 import MapReadOnly from '../../components/MapReadOnly'
 import SearchableSelect from '../../components/SearchableSelect'
 import EletricistaItemFotos from '../../components/EletricistaItemFotos'
-import { uploadFile } from '../../services/storage'
+import { uploadFile, romaneioFotoStoragePath } from '../../services/storage'
+import { storageErrorMessagePT } from '../../utils/firebaseStorageErrors'
 import { toast } from 'react-toastify'
 import {
   PEDIDO_STATUS,
@@ -27,7 +28,7 @@ import { fetchUserDisplayName, TANQUE_HIST_TIPO } from '../../services/tanqueLif
 import { format, isAfter } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { romaneioProgress, computeRomaneioStatus } from '../../utils/romaneio'
-import { CheckCircle2 } from 'lucide-react'
+import { CheckCircle2, Loader2 } from 'lucide-react'
 
 function tsToDate(v) {
   if (!v) return null
@@ -81,6 +82,7 @@ export default function EletricistaRomaneioDetalhe() {
   const [loading, setLoading] = useState(true)
   const [edits, setEdits] = useState({})
   const [statusFilter, setStatusFilter] = useState('all')
+  const [savingItemId, setSavingItemId] = useState(null)
 
   useEffect(() => {
     let cancelled = false
@@ -182,6 +184,7 @@ export default function EletricistaRomaneioDetalhe() {
   }
 
   async function saveItem(item) {
+    if (savingItemId !== null) return
     const st = edits[item.id]?.status ?? item.status
     const notas = edits[item.id]?.notasEletricista ?? item.notasEletricista ?? ''
     const newFiles = edits[item.id]?.files || []
@@ -193,13 +196,12 @@ export default function EletricistaRomaneioDetalhe() {
     }
 
     let fotos = [...existingFotos]
+    setSavingItemId(item.id)
     try {
       for (let i = 0; i < newFiles.length; i++) {
         const f = newFiles[i]
-        const url = await uploadFile(
-          `romaneios/${romaneio.id}/${item.id}/${Date.now()}_${i}_${f.name}`,
-          f,
-        )
+        const path = romaneioFotoStoragePath(romaneio.id, item.id, i, f)
+        const url = await uploadFile(path, f)
         fotos.push(url)
       }
 
@@ -343,7 +345,9 @@ export default function EletricistaRomaneioDetalhe() {
       toast.success('Baixa registada.')
     } catch (err) {
       console.error(err)
-      toast.error('Erro ao guardar.')
+      toast.error(storageErrorMessagePT(err))
+    } finally {
+      setSavingItemId(null)
     }
   }
 
@@ -549,13 +553,20 @@ export default function EletricistaRomaneioDetalhe() {
 
                 <button
                   type="button"
+                  disabled={savingItemId !== null}
+                  aria-busy={savingItemId === item.id}
                   onClick={() => saveItem(item)}
-                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:pointer-events-none disabled:opacity-65"
                 >
-                  <span className="inline-flex items-center gap-2">
-                    {isConcluido ? (
+                  <span className="inline-flex items-center justify-center gap-2">
+                    {savingItemId === item.id ? (
                       <>
-                        <CheckCircle2 className="h-4 w-4" aria-hidden />
+                        <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden />
+                        A guardar…
+                      </>
+                    ) : isConcluido ? (
+                      <>
+                        <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden />
                         Concluído
                       </>
                     ) : (

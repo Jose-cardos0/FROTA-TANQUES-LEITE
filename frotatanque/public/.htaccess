@@ -1,0 +1,41 @@
+# Tanques Natville — frotanatville.online (Hostinger / Apache)
+# Coloque este ficheiro na raiz do site (ex.: public_html), juntamente com o conteúdo de `dist/`.
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+
+  # 1) HTTPS obrigatório
+  RewriteCond %{HTTPS} !=on
+  RewriteRule ^ https://frotanatville.online%{REQUEST_URI} [L,R=301]
+
+  # 2) www → domínio principal (opcional; comente se usar só www na Hostinger)
+  RewriteCond %{HTTP_HOST} ^www\.frotanatville\.online$ [NC]
+  RewriteRule ^ https://frotanatville.online%{REQUEST_URI} [L,R=301]
+
+  # 3) React / Vite SPA: ficheiros e pastas reais servem-se; resto vai para index.html
+  RewriteRule ^index\.html$ - [L]
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule . /index.html [L]
+</IfModule>
+
+# Sem listagem de pastas
+Options -Indexes
+
+# Manifest PWA
+<IfModule mod_mime.c>
+  AddType application/manifest+json .webmanifest
+</IfModule>
+
+# Compressão (se mod_deflate estiver ativo)
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/plain text/css text/xml application/javascript application/json application/xml image/svg+xml
+</IfModule>
+
+# Cache breve para HTML; ficheiros com hash no nome no Vite já vêm com nomes únicos
+<IfModule mod_headers.c>
+  <FilesMatch "\.(html)$">
+    Header set Cache-Control "no-cache, no-store, must-revalidate"
+  </FilesMatch>
+</IfModule>

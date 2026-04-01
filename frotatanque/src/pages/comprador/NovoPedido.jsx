@@ -9,6 +9,7 @@ import PageTitleWithHelp from '../../components/PageTitleWithHelp'
 import { toast } from 'react-toastify'
 import { PEDIDO_TIPO, PEDIDO_STATUS } from '../../constants/roles'
 import { reverseGeocodeLatLng } from '../../utils/reverseGeocode'
+import { ensureProducerForTypedInstalacao } from '../../utils/ensureProducerForInstalacao'
 
 const TIPO_PEDIDO_OPTIONS = [
   { value: PEDIDO_TIPO.INSTALACAO, label: 'Instalação' },
@@ -71,7 +72,7 @@ export default function NovoPedido() {
   }, [producerCadastroId, produtores, isInstalacao])
 
   const producerOptionsInstalacao = [
-    { value: '', label: '— Sem ligação ao cadastro (só nome escrito) —' },
+    { value: '', label: '— Novo nome: cria produtor no cadastro ao enviar —' },
     ...produtores.map((p) => ({
       value: p.id,
       label: `${p.name || p.id}${p.region ? ` · ${p.region}` : ''}`,
@@ -140,6 +141,17 @@ export default function NovoPedido() {
     }
     setSaving(true)
     try {
+      let finalProducerId = producerCadastroId || null
+      if (isInstalacao && !producerCadastroId) {
+        finalProducerId = await ensureProducerForTypedInstalacao({
+          produtores,
+          producerName: producerName.trim(),
+          region: region.trim(),
+          address: address.trim(),
+          createdByUserId: profile.id,
+        })
+      }
+
       await addDoc(collection(db, 'pedidos'), {
         compradorId: profile.id,
         producerName: producerName.trim(),
@@ -153,7 +165,7 @@ export default function NovoPedido() {
         notes: notes.trim() || '',
         status: PEDIDO_STATUS.ABERTO,
         tanqueId: null,
-        producerId: producerCadastroId || null,
+        producerId: finalProducerId,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         editHistory: [],
@@ -173,8 +185,8 @@ export default function NovoPedido() {
       <div>
         <PageTitleWithHelp title="Novo pedido" tooltipId="help-comprador-novo-pedido">
           <p>
-            <strong>Instalação</strong> costuma ser um <strong>novo produtor</strong>: pode escrever o nome ou escolher
-            alguém já no cadastro Natville. <strong>Troca, remoção e manutenção</strong> referem-se a produtores já
+            <strong>Instalação</strong> costuma ser um <strong>novo produtor</strong>: pode escrever o nome e região (o
+            produtor é criado automaticamente no cadastro ao enviar o pedido) ou escolher alguém já no cadastro Natville. <strong>Troca, remoção e manutenção</strong> referem-se a produtores já
             registados — deve escolher sempre o produtor no cadastro. O <strong>gestor</strong> vê o pedido em aberto e
             pode montar o romaneio; o <strong>eletricista</strong> usa o mapa, o endereço e as{' '}
             <strong>notas do comprador</strong> no terreno. O endereço é obrigatório; ao usar a localização atual,
@@ -263,7 +275,7 @@ export default function NovoPedido() {
               />
               <p className="mt-1 text-xs text-slate-500">
                 {isInstalacao
-                  ? 'Ajuda a associar automaticamente o tanque ao produtor em frota e histórico.'
+                  ? 'Se não escolher ninguém aqui, o nome e região que escrever abaixo passam a existir no cadastro de produtores ao criar o pedido (reutilizamos se já existir o mesmo nome e região).'
                   : 'Obrigatório para troca, remoção e manutenção — nome e região vêm do cadastro.'}
               </p>
             </div>
@@ -291,7 +303,8 @@ export default function NovoPedido() {
                   </p>
                 ) : (
                   <p className="mt-1 text-xs text-slate-500">
-                    Obrigatório se não escolher produtor no cadastro.
+                    Obrigatório se não escolher produtor no cadastro — será registado no cadastro ao enviar (ou ligado a um
+                    já existente com o mesmo nome e região).
                   </p>
                 )}
               </div>

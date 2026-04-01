@@ -1,5 +1,10 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
-import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebase/auth'
+import {
+  onAuthStateChanged,
+  sendPasswordResetEmail,
+  signInWithEmailAndPassword,
+  signOut,
+} from 'firebase/auth'
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore'
 import { auth, db } from '../firebase/config'
 import { ADMIN_NATVILLE_EMAIL, ROLES } from '../constants/roles'
@@ -74,6 +79,12 @@ export function AuthProvider({ children }) {
       loading,
       async login(email, password) {
         await signInWithEmailAndPassword(auth, email, password)
+      },
+      async sendPasswordReset(email) {
+        const trimmed = String(email || '').trim()
+        const url =
+          typeof window !== 'undefined' ? `${window.location.origin}/login` : undefined
+        await sendPasswordResetEmail(auth, trimmed, url ? { url, handleCodeInApp: false } : undefined)
       },
       async logout() {
         await signOut(auth)

@@ -11,6 +11,7 @@ import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { PEDIDO_STATUS, PEDIDO_TIPO } from '../../constants/roles'
 import { reverseGeocodeLatLng } from '../../utils/reverseGeocode'
+import { ensureProducerForTypedInstalacao } from '../../utils/ensureProducerForInstalacao'
 
 const TIPO_PEDIDO_OPTIONS = [
   { value: PEDIDO_TIPO.INSTALACAO, label: 'Instalação' },
@@ -74,7 +75,7 @@ export default function EditarPedido() {
   }, [producerCadastroId, produtores, isInstalacao])
 
   const producerOptionsInstalacao = [
-    { value: '', label: '— Sem ligação ao cadastro (só nome escrito) —' },
+    { value: '', label: '— Novo nome: cria produtor no cadastro ao guardar —' },
     ...produtores.map((p) => ({
       value: p.id,
       label: `${p.name || p.id}${p.region ? ` · ${p.region}` : ''}`,
@@ -182,21 +183,32 @@ export default function EditarPedido() {
       notes: pedido.notes,
       producerId: pedido.producerId || null,
     }
-    const newData = {
-      producerName: producerName.trim(),
-      region: region.trim(),
-      volumeLitros: Number(volumeLitros) || 0,
-      orderDate,
-      address: address.trim(),
-      lat: lat ?? null,
-      lng: lng ?? null,
-      tipoPedido,
-      notes: notes.trim() || '',
-      producerId: producerCadastroId || null,
-    }
-
     setSaving(true)
     try {
+      let resolvedProducerId = producerCadastroId || ''
+      if (isInstalacao && !producerCadastroId) {
+        resolvedProducerId = await ensureProducerForTypedInstalacao({
+          produtores,
+          producerName: producerName.trim(),
+          region: region.trim(),
+          address: address.trim(),
+          createdByUserId: profile.id,
+        })
+      }
+
+      const newData = {
+        producerName: producerName.trim(),
+        region: region.trim(),
+        volumeLitros: Number(volumeLitros) || 0,
+        orderDate,
+        address: address.trim(),
+        lat: lat ?? null,
+        lng: lng ?? null,
+        tipoPedido,
+        notes: notes.trim() || '',
+        producerId: resolvedProducerId || null,
+      }
+
       const editHistory = [...(pedido.editHistory || [])]
       editHistory.push({
         at: new Date().toISOString(),
