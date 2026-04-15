@@ -50,6 +50,9 @@ export default function NovoPedido() {
   const [cadastroFiles, setCadastroFiles] = useState(() => emptyCadastroDocsState())
 
   const isInstalacao = tipoPedido === PEDIDO_TIPO.INSTALACAO
+  const isRemocao = tipoPedido === PEDIDO_TIPO.REMOCAO
+  const isTrocaOuManutencao =
+    tipoPedido === PEDIDO_TIPO.TROCA || tipoPedido === PEDIDO_TIPO.MANUTENCAO
   const nomeRegiaoDoCadastro = !!producerCadastroId
   const prevProducerCadastroRef = useRef(producerCadastroId)
 
@@ -60,11 +63,11 @@ export default function NovoPedido() {
   }, [])
 
   useEffect(() => {
-    if (!isInstalacao && !producerCadastroId) {
+    if (isTrocaOuManutencao && !producerCadastroId) {
       setProducerName('')
       setRegion('')
     }
-  }, [isInstalacao, producerCadastroId])
+  }, [isTrocaOuManutencao, producerCadastroId])
 
   useEffect(() => {
     const prev = prevProducerCadastroRef.current
@@ -77,11 +80,11 @@ export default function NovoPedido() {
       }
       return
     }
-    if (prev && !producerCadastroId && isInstalacao) {
+    if (prev && !producerCadastroId && (isInstalacao || isRemocao)) {
       setProducerName('')
       setRegion('')
     }
-  }, [producerCadastroId, produtores, isInstalacao])
+  }, [producerCadastroId, produtores, isInstalacao, isRemocao])
 
   useEffect(() => {
     if (isInstalacao && !producerCadastroId) return
@@ -133,6 +136,14 @@ export default function NovoPedido() {
     })),
   ]
 
+  const producerOptionsRemocao = [
+    { value: '', label: '— Escrever nome à mão (sem escolher no cadastro) —' },
+    ...produtores.map((p) => ({
+      value: p.id,
+      label: `${p.name || p.id}${p.region ? ` · ${p.region}` : ''}`,
+    })),
+  ]
+
   function onMapChange(la, ln) {
     setLat(la)
     setLng(ln)
@@ -165,14 +176,19 @@ export default function NovoPedido() {
       toast.error('Indique o endereço.')
       return
     }
-    if (!isInstalacao) {
+    if (isTrocaOuManutencao) {
       if (!producerCadastroId) {
         toast.error('Selecione o produtor no cadastro Natville.')
         return
       }
-    } else if (!producerCadastroId && !producerName.trim()) {
+    } else if (isInstalacao && !producerCadastroId && !producerName.trim()) {
       toast.error('Indique o nome do produtor ou selecione um produtor no cadastro.')
       return
+    } else if (isRemocao && !producerCadastroId) {
+      if (!producerName.trim() || !region.trim()) {
+        toast.error('Selecione um produtor no cadastro ou indique nome e região do produtor.')
+        return
+      }
     }
     if (!region.trim()) {
       toast.error('Indique a região do produtor.')
@@ -195,11 +211,21 @@ export default function NovoPedido() {
           region: region.trim(),
           address: address.trim(),
           createdByUserId: profile.id,
+          source: 'comprador_instalacao',
         })
         await enrichProducerCadastroFromComprador(finalProducerId, {
           phone: producerPhoneCadastro,
           bankDetailsText,
           filesByCategory: cadastroFiles,
+        })
+      } else if (isRemocao && !producerCadastroId) {
+        finalProducerId = await ensureProducerForTypedInstalacao({
+          produtores,
+          producerName: producerName.trim(),
+          region: region.trim(),
+          address: address.trim(),
+          createdByUserId: profile.id,
+          source: 'comprador_remocao',
         })
       }
 
@@ -238,8 +264,8 @@ export default function NovoPedido() {
         <PageTitleWithHelp title="Novo pedido" tooltipId="help-comprador-novo-pedido">
           <p>
             <strong>Instalação</strong> costuma ser um <strong>novo produtor</strong>: pode escrever o nome e região (o
-            produtor é criado automaticamente no cadastro ao enviar o pedido) ou escolher alguém já no cadastro Natville. <strong>Troca, remoção e manutenção</strong> referem-se a produtores já
-            registados — deve escolher sempre o produtor no cadastro. O <strong>gestor</strong> vê o pedido em aberto e
+            produtor é criado automaticamente no cadastro ao enviar o pedido) ou escolher alguém já no cadastro Natville.             <strong>Troca e manutenção</strong> exigem produtor no cadastro; em <strong>remoção</strong> pode escolher no
+            cadastro ou escrever nome e região (identificação no terreno). O <strong>gestor</strong> vê o pedido em aberto e
             pode montar o romaneio; o <strong>eletricista</strong> usa o mapa, o endereço e as{' '}
             <strong>notas do comprador</strong> no terreno. O endereço é obrigatório; ao usar a localização atual,
             tentamos preencher o endereço automaticamente (OpenStreetMap).
@@ -315,24 +341,39 @@ export default function NovoPedido() {
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="sm:col-span-2">
               <label className="text-sm font-medium text-slate-700">
-                Produtor no cadastro Natville{isInstalacao ? ' (recomendado)' : ' *'}
+                Produtor no cadastro Natville
+                {isInstalacao || isRemocao ? ' (opcional)' : ' *'}
               </label>
               <SearchableSelect
                 value={producerCadastroId}
                 onChange={setProducerCadastroId}
-                options={isInstalacao ? producerOptionsInstalacao : producerOptionsCadastroObrigatorio}
-                placeholder={isInstalacao ? '— Opcional —' : '— Escolher —'}
+                options={
+                  isInstalacao
+                    ? producerOptionsInstalacao
+                    : isRemocao
+                      ? producerOptionsRemocao
+                      : producerOptionsCadastroObrigatorio
+                }
+                placeholder={
+                  isInstalacao
+                    ? '— Opcional —'
+                    : isRemocao
+                      ? '— Opcional: escolher no cadastro —'
+                      : '— Escolher —'
+                }
                 title="Produtor no cadastro Natville"
                 className="mt-1"
               />
               <p className="mt-1 text-xs text-slate-500">
                 {isInstalacao
                   ? 'Se não escolher ninguém aqui, o nome e região que escrever abaixo passam a existir no cadastro de produtores ao criar o pedido (reutilizamos se já existir o mesmo nome e região).'
-                  : 'Obrigatório para troca, remoção e manutenção — nome e região vêm do cadastro.'}
+                  : isRemocao
+                    ? 'Pode escolher alguém do cadastro ou escrever nome e região abaixo (ex.: produtor ainda não registado).'
+                    : 'Obrigatório para troca e manutenção — nome e região vêm do cadastro.'}
               </p>
             </div>
 
-            {isInstalacao ? (
+            {isInstalacao || isRemocao ? (
               <div className="sm:col-span-2">
                 <label className="text-sm font-medium text-slate-700">Nome do produtor *</label>
                 <input
@@ -353,6 +394,11 @@ export default function NovoPedido() {
                   <p className="mt-1 text-xs text-slate-500">
                     Definido pelo cadastro — altere trocando a seleção acima.
                   </p>
+                ) : isRemocao ? (
+                  <p className="mt-1 text-xs text-slate-500">
+                    Obrigatório se não escolher produtor no cadastro — use o nome tal como deve aparecer no pedido de
+                    remoção.
+                  </p>
                 ) : (
                   <p className="mt-1 text-xs text-slate-500">
                     Obrigatório se não escolher produtor no cadastro — será registado no cadastro ao enviar (ou ligado a um
@@ -366,14 +412,16 @@ export default function NovoPedido() {
               <label className="text-sm font-medium text-slate-700">Região do produtor *</label>
               <input
                 required
-                readOnly={nomeRegiaoDoCadastro || !isInstalacao}
+                readOnly={nomeRegiaoDoCadastro || isTrocaOuManutencao}
                 value={region}
                 onChange={(e) => setRegion(e.target.value)}
                 className={`mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 ${
-                  nomeRegiaoDoCadastro || !isInstalacao ? 'cursor-not-allowed bg-slate-100 text-slate-800' : ''
+                  nomeRegiaoDoCadastro || isTrocaOuManutencao
+                    ? 'cursor-not-allowed bg-slate-100 text-slate-800'
+                    : ''
                 }`}
                 title={
-                  nomeRegiaoDoCadastro || !isInstalacao
+                  nomeRegiaoDoCadastro || isTrocaOuManutencao
                     ? 'Preenchido automaticamente a partir do cadastro Natville.'
                     : undefined
                 }

@@ -29,10 +29,43 @@ import PageTitleWithHelp from '../../components/PageTitleWithHelp'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 
+/** Data do pedido indicada pelo comprador (`orderDate`); se faltar, usa criação do documento. */
+function formatPedidoOrderDate(p) {
+  const od = p?.orderDate
+  if (od != null && od !== '') {
+    try {
+      if (typeof od === 'string') {
+        const parts = od.trim().slice(0, 10).split('-')
+        if (parts.length === 3) {
+          const y = Number(parts[0])
+          const mo = Number(parts[1])
+          const d = Number(parts[2])
+          if (y && mo && d) return format(new Date(y, mo - 1, d), 'dd/MM/yyyy', { locale: ptBR })
+        }
+        const dt = new Date(od)
+        if (!Number.isNaN(dt.getTime())) return format(dt, 'dd/MM/yyyy', { locale: ptBR })
+      } else if (od && typeof od.toDate === 'function') {
+        return format(od.toDate(), 'dd/MM/yyyy', { locale: ptBR })
+      }
+    } catch {
+      /* ignorar */
+    }
+  }
+  if (p?.createdAt?.toDate) {
+    try {
+      return format(p.createdAt.toDate(), 'dd/MM/yyyy', { locale: ptBR })
+    } catch {
+      /* */
+    }
+  }
+  return '—'
+}
+
 export default function GestorPedidos() {
   const [searchParams, setSearchParams] = useSearchParams()
   const tab = searchParams.get('tab') || 'abertos'
   const [pedidos, setPedidos] = useState([])
+  const [userMap, setUserMap] = useState({})
   const [tanques, setTanques] = useState([])
   const [loading, setLoading] = useState(true)
   const [deletingId, setDeletingId] = useState(null)
@@ -61,6 +94,17 @@ export default function GestorPedidos() {
     return onSnapshot(collection(db, 'tanques'), (s) =>
       setTanques(s.docs.map((d) => ({ id: d.id, ...d.data() }))),
     )
+  }, [])
+
+  useEffect(() => {
+    return onSnapshot(collection(db, 'users'), (s) => {
+      const m = {}
+      for (const d of s.docs) {
+        const x = d.data()
+        m[d.id] = x.displayName || x.email || d.id
+      }
+      setUserMap(m)
+    })
   }, [])
 
   const tanqueById = useMemo(() => {
@@ -323,9 +367,11 @@ export default function GestorPedidos() {
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-        <table className="min-w-[1100px] w-full text-left text-sm">
+        <table className="min-w-[1280px] w-full text-left text-sm">
           <thead className="border-b border-slate-200 bg-slate-50">
             <tr>
+              <th className="whitespace-nowrap px-3 py-2">Data (pedido)</th>
+              <th className="min-w-[8rem] px-3 py-2">Comprador</th>
               <th className="px-3 py-2">Produtor</th>
               <th className="px-3 py-2">Região</th>
               <th className="px-3 py-2">Tipo</th>
@@ -340,7 +386,7 @@ export default function GestorPedidos() {
           <tbody>
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={9} className="px-4 py-8 text-center text-slate-500">
+                <td colSpan={11} className="px-4 py-8 text-center text-slate-500">
                   Nenhum pedido nesta lista.
                 </td>
               </tr>
@@ -352,8 +398,17 @@ export default function GestorPedidos() {
                 p.tanqueId ||
                 p.status === PEDIDO_STATUS.VINCULADO ||
                 p.status === PEDIDO_STATUS.EM_ROMANEIO
+              const compradorNome = p.compradorId
+                ? userMap[p.compradorId] || p.compradorId
+                : '—'
               return (
                 <tr key={p.id} className="border-b border-slate-100 align-top">
+                  <td className="whitespace-nowrap px-3 py-2 tabular-nums text-slate-800">
+                    {formatPedidoOrderDate(p)}
+                  </td>
+                  <td className="max-w-[12rem] px-3 py-2 text-slate-800" title={compradorNome}>
+                    <span className="line-clamp-2">{compradorNome}</span>
+                  </td>
                   <td className="px-3 py-2 font-medium">{p.producerName}</td>
                   <td className="px-3 py-2">{p.region}</td>
                   <td className="px-3 py-2">
