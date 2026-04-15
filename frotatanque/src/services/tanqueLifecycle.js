@@ -64,6 +64,7 @@ export async function bindTanqueViaRomaneio({
   compradorNome,
   tipoPedidoLabel,
   motivoSolicitacao,
+  recolherTanque,
 }) {
   if (!tanqueId) return
   const tRef = doc(db, 'tanques', tanqueId)
@@ -73,6 +74,7 @@ export async function bindTanqueViaRomaneio({
     tipoPedidoLabel && `Tipo de serviço: ${tipoPedidoLabel}`,
     motivoSolicitacao && `Solicitação do comprador: ${motivoSolicitacao}`,
     compradorNome && `Comprador: ${compradorNome}`,
+    recolherTanque ? 'RECOLHER — recolha do tanque na propriedade e devolução à Natville.' : '',
   ]
     .filter(Boolean)
     .join('\n')
@@ -96,6 +98,7 @@ export async function bindTanqueViaRomaneio({
     compradorNome: compradorNome || null,
     tipoPedidoLabel: tipoPedidoLabel || null,
     motivoSolicitacao: motivoSolicitacao || null,
+    ...(recolherTanque ? { recolherTanque: true } : {}),
   })
 }
 

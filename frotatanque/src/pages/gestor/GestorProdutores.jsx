@@ -17,7 +17,11 @@ import { useAuth } from '../../context/AuthContext'
 import { toast } from 'react-toastify'
 import { firestoreErrorMessagePT } from '../../utils/firebaseFirestoreErrors'
 import PageTitleWithHelp from '../../components/PageTitleWithHelp'
-import { Plus } from 'lucide-react'
+import { Plus, FileText } from 'lucide-react'
+import {
+  PRODUTOR_CADASTRO_DOC_KEYS,
+  PRODUTOR_CADASTRO_DOC_LABELS,
+} from '../../constants/producerCadastroDocs'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 
@@ -34,9 +38,11 @@ export default function GestorProdutores() {
   const [editRegion, setEditRegion] = useState('')
   const [editPhone, setEditPhone] = useState('')
   const [editAddress, setEditAddress] = useState('')
+  const [editBankDetailsText, setEditBankDetailsText] = useState('')
   const [savingEdit, setSavingEdit] = useState(false)
   const [tanques, setTanques] = useState([])
   const [cadastroModalOpen, setCadastroModalOpen] = useState(false)
+  const [docsModalProducer, setDocsModalProducer] = useState(null)
 
   useEffect(() => {
     return onSnapshot(collection(db, 'produtores'), (s) =>
@@ -69,6 +75,7 @@ export default function GestorProdutores() {
         region: region.trim(),
         phone: phone.trim() || null,
         address: address.trim() || null,
+        bankDetailsText: null,
         createdAt: serverTimestamp(),
         createdBy: profile.id,
       })
@@ -89,6 +96,7 @@ export default function GestorProdutores() {
     setEditRegion(r.region || '')
     setEditPhone(r.phone || '')
     setEditAddress(r.address || '')
+    setEditBankDetailsText(r.bankDetailsText || '')
   }
 
   function fecharEdicao() {
@@ -97,6 +105,7 @@ export default function GestorProdutores() {
     setEditRegion('')
     setEditPhone('')
     setEditAddress('')
+    setEditBankDetailsText('')
   }
 
   async function salvarEdicao(e) {
@@ -109,6 +118,7 @@ export default function GestorProdutores() {
         region: editRegion.trim(),
         phone: editPhone.trim() || null,
         address: editAddress.trim() || null,
+        bankDetailsText: editBankDetailsText.trim() || null,
         updatedAt: serverTimestamp(),
       })
       toast.success('Produtor atualizado.')
@@ -168,6 +178,76 @@ export default function GestorProdutores() {
           Cadastrar produtor
         </button>
       </div>
+
+      {docsModalProducer && (
+        <div
+          className="fixed inset-0 z-[9700] flex items-center justify-center bg-black/40 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="gestor-produtor-docs-titulo"
+        >
+          <button
+            type="button"
+            className="absolute inset-0 cursor-default"
+            aria-label="Fechar"
+            onClick={() => setDocsModalProducer(null)}
+          />
+          <div className="relative z-10 max-h-[min(90vh,760px)] w-full max-w-2xl overflow-y-auto rounded-xl border border-slate-200 bg-white p-6 shadow-xl">
+            <div className="flex items-start justify-between gap-3">
+              <h2 id="gestor-produtor-docs-titulo" className="text-lg font-semibold text-slate-900">
+                Cadastro e documentos — {docsModalProducer.name}
+              </h2>
+              <button
+                type="button"
+                onClick={() => setDocsModalProducer(null)}
+                className="rounded-lg px-2 py-1 text-sm text-slate-600 hover:bg-slate-100"
+              >
+                Fechar
+              </button>
+            </div>
+            <div className="mt-4 space-y-4 text-sm text-slate-700">
+              <div>
+                <p className="text-xs font-semibold uppercase text-slate-500">Telefone</p>
+                <p className="mt-1">{docsModalProducer.phone || '—'}</p>
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase text-slate-500">Dados bancários (texto)</p>
+                <p className="mt-1 whitespace-pre-wrap">{docsModalProducer.bankDetailsText || '—'}</p>
+              </div>
+              {PRODUTOR_CADASTRO_DOC_KEYS.map((key) => {
+                const list = Array.isArray(docsModalProducer.cadastroDocs?.[key])
+                  ? docsModalProducer.cadastroDocs[key]
+                  : []
+                return (
+                  <div key={key} className="rounded-lg border border-slate-100 bg-slate-50/80 p-3">
+                    <p className="text-xs font-semibold text-slate-800">{PRODUTOR_CADASTRO_DOC_LABELS[key]}</p>
+                    {list.length === 0 ? (
+                      <p className="mt-2 text-xs text-slate-500">Sem ficheiros.</p>
+                    ) : (
+                      <ul className="mt-2 space-y-2">
+                        {list.map((docu, idx) => (
+                          <li key={`${key}-${idx}-${docu.url}`}>
+                            <a
+                              href={docu.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              download={docu.fileName || 'documento'}
+                              className="inline-flex items-center gap-2 font-medium text-blue-700 underline hover:text-blue-900"
+                            >
+                              <FileText className="h-4 w-4 shrink-0" aria-hidden />
+                              {docu.fileName || 'Abrir ficheiro'}
+                            </a>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {cadastroModalOpen && (
         <div
@@ -300,6 +380,16 @@ export default function GestorProdutores() {
               className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2"
             />
           </div>
+          <div>
+            <label className="text-sm font-medium">Dados bancários (texto livre)</label>
+            <textarea
+              value={editBankDetailsText}
+              onChange={(e) => setEditBankDetailsText(e.target.value)}
+              rows={3}
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+              placeholder="Banco, agência, conta…"
+            />
+          </div>
           <div className="flex flex-wrap gap-2">
             <button
               type="submit"
@@ -387,6 +477,13 @@ export default function GestorProdutores() {
                 </td>
                 <td className="px-4 py-2">
                   <div className="flex flex-wrap gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setDocsModalProducer(r)}
+                      className="rounded bg-slate-100 px-2 py-1 text-xs font-medium text-slate-900 hover:bg-slate-200"
+                    >
+                      Documentos
+                    </button>
                     <button
                       type="button"
                       onClick={() => abrirEdicao(r)}

@@ -313,6 +313,7 @@ export default function EletricistaRomaneioDetalhe() {
       if (item.pedidoId && st === ITEM_ROMANEIO_STATUS.CONCLUIDO) {
         await updateDoc(doc(db, 'pedidos', item.pedidoId), {
           status: PEDIDO_STATUS.CONCLUIDO,
+          romaneioRecolher: false,
           updatedAt: serverTimestamp(),
         })
       }
@@ -416,6 +417,7 @@ export default function EletricistaRomaneioDetalhe() {
       <ul className="space-y-6">
         {(itensFiltrados || []).map((item) => {
           const ped = pedidos[item.pedidoId]
+          const recolherLinha = !!item.recolher || !!ped?.romaneioRecolher
           const ed = edits[item.id] || {}
           const statusEfetivo = ed.status ?? item.status
           const visitaEmAberto =
@@ -438,6 +440,11 @@ export default function EletricistaRomaneioDetalhe() {
                 <h2 className="font-semibold text-slate-900">
                   {item.producerNameSnapshot || ped?.producerName || 'Produtor'}
                 </h2>
+                {recolherLinha ? (
+                  <span className="inline-flex items-center rounded-full border border-orange-300 bg-orange-50 px-2.5 py-0.5 text-xs font-semibold text-orange-900">
+                    RECOLHER — ir buscar o tanque e devolver à Natville
+                  </span>
+                ) : null}
                 {mostrarBolinhaAtraso ? (
                   <span
                     className="inline-flex items-center gap-1.5 rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-xs font-medium text-red-800"

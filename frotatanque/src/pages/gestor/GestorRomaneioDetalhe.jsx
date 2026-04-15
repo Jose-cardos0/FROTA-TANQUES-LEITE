@@ -249,6 +249,7 @@ export default function GestorRomaneioDetalhe() {
             await updateDoc(pref, {
               status: PEDIDO_STATUS.ABERTO,
               tanqueId: null,
+              romaneioRecolher: false,
               updatedAt: serverTimestamp(),
             })
           }
@@ -441,6 +442,7 @@ export default function GestorRomaneioDetalhe() {
         <ul className="mt-4 space-y-5">
           {(itensFiltrados || []).map((it) => {
             const ped = pedidosMap[it.pedidoId]
+            const recolherLinha = !!it.recolher || !!ped?.romaneioRecolher
             const tq = it.tanqueId ? tanqueById[it.tanqueId] : null
             const tanqueLabel = tq
               ? `${tq.modelo} · ${tq.volumeLitros} L`
@@ -457,6 +459,11 @@ export default function GestorRomaneioDetalhe() {
                     <p className="text-sm text-slate-600">
                       Tanque: <span className="font-medium">{tanqueLabel}</span>
                     </p>
+                    {recolherLinha ? (
+                      <p className="mt-2 inline-flex rounded-full border border-orange-300 bg-orange-50 px-2.5 py-0.5 text-xs font-semibold text-orange-900">
+                        RECOLHER — recolha na propriedade e devolução à Natville
+                      </p>
+                    ) : null}
                   </div>
                   <span
                     className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${

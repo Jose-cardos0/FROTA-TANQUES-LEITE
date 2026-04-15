@@ -209,6 +209,7 @@ export default function GestorPedidos() {
         status: PEDIDO_STATUS.CANCELADO,
         refusedReason: motivo,
         refusedAt: serverTimestamp(),
+        romaneioRecolher: false,
         updatedAt: serverTimestamp(),
       })
 
@@ -400,6 +401,11 @@ export default function GestorPedidos() {
                         )}
                       </div>
                     )}
+                    {p.romaneioRecolher && p.status === PEDIDO_STATUS.EM_ROMANEIO ? (
+                      <p className="mt-2 text-xs font-semibold text-orange-800">
+                        RECOLHER (tanque a recolher à propriedade)
+                      </p>
+                    ) : null}
                   </td>
                   <td className="px-3 py-2">
                     <div className="w-36">

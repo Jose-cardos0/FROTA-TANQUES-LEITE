@@ -47,7 +47,7 @@ export default function GestorRomaneio() {
   const [eletricistaId, setEletricistaId] = useState('')
   const [dataInicio, setDataInicio] = useState('')
   const [dataFim, setDataFim] = useState('')
-  const [linhas, setLinhas] = useState([{ pedidoId: '', tanqueId: '' }])
+  const [linhas, setLinhas] = useState([{ pedidoId: '', tanqueId: '', recolher: false }])
   const [deletingId, setDeletingId] = useState(null)
   const [novoRomaneioModalOpen, setNovoRomaneioModalOpen] = useState(false)
 
@@ -142,13 +142,13 @@ export default function GestorRomaneio() {
   }
 
   function addLinha() {
-    setLinhas((l) => [...l, { pedidoId: '', tanqueId: '' }])
+    setLinhas((l) => [...l, { pedidoId: '', tanqueId: '', recolher: false }])
   }
 
   function removeLinha(i) {
     setLinhas((l) => {
       const next = l.filter((_, idx) => idx !== i)
-      return next.length ? next : [{ pedidoId: '', tanqueId: '' }]
+      return next.length ? next : [{ pedidoId: '', tanqueId: '', recolher: false }]
     })
   }
 
@@ -218,6 +218,7 @@ export default function GestorRomaneio() {
         tanqueId: l.tanqueId,
         producerId: producerIdResolved,
         producerNameSnapshot: ped?.producerName || '',
+        recolher: !!l.recolher,
         status: ITEM_ROMANEIO_STATUS.PENDENTE,
         notasEletricista: '',
         fotos: [],
@@ -248,6 +249,7 @@ export default function GestorRomaneio() {
           status: PEDIDO_STATUS.EM_ROMANEIO,
           tanqueId: it.tanqueId,
           producerId: it.producerId || ped?.producerId || null,
+          romaneioRecolher: !!it.recolher,
           updatedAt: serverTimestamp(),
         })
         await bindTanqueViaRomaneio({
@@ -260,13 +262,14 @@ export default function GestorRomaneio() {
           compradorNome,
           tipoPedidoLabel: PEDIDO_TIPO_LABELS[ped?.tipoPedido] || ped?.tipoPedido || '',
           motivoSolicitacao: (ped?.notes || '').trim() || null,
+          recolherTanque: !!it.recolher,
         })
       }
       setTitulo('')
       setEletricistaId('')
       setDataInicio('')
       setDataFim('')
-      setLinhas([{ pedidoId: '', tanqueId: '' }])
+      setLinhas([{ pedidoId: '', tanqueId: '', recolher: false }])
       setNovoRomaneioModalOpen(false)
       if (semProdutorCadastro > 0) {
         toast.warning(
@@ -315,6 +318,7 @@ export default function GestorRomaneio() {
           await updateDoc(pref, {
             status: PEDIDO_STATUS.ABERTO,
             tanqueId: null,
+            romaneioRecolher: false,
             updatedAt: serverTimestamp(),
           })
         }
@@ -478,6 +482,29 @@ export default function GestorRomaneio() {
                   />
                 </div>
               </div>
+              {linha.tanqueId ? (
+                <div className="mt-3 rounded-lg border border-slate-200 bg-white px-3 py-2.5">
+                  <p className="text-xs text-slate-500">Tanque nesta linha</p>
+                  <p className="text-sm font-semibold text-slate-900">
+                    {(() => {
+                      const tq = tanques.find((t) => t.id === linha.tanqueId)
+                      return tq ? `${tq.modelo} — ${tq.volumeLitros} L` : linha.tanqueId
+                    })()}
+                  </p>
+                  <label className="mt-3 flex cursor-pointer items-start gap-3 text-sm text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={!!linha.recolher}
+                      onChange={(e) => setLinha(i, 'recolher', e.target.checked)}
+                      className="mt-1 h-4 w-4 shrink-0 rounded border-slate-400 text-orange-600 focus:ring-orange-500"
+                    />
+                    <span>
+                      <strong className="text-orange-800">RECOLHER</strong> — marque se o eletricista deve ir buscar
+                      este tanque à propriedade e devolvê-lo à Natville (recolha / retorno à empresa).
+                    </span>
+                  </label>
+                </div>
+              ) : null}
               {linhas.length > 1 && (
                 <button
                   type="button"

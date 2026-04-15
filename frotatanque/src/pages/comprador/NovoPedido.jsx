@@ -10,6 +10,15 @@ import { toast } from 'react-toastify'
 import { PEDIDO_TIPO, PEDIDO_STATUS } from '../../constants/roles'
 import { reverseGeocodeLatLng } from '../../utils/reverseGeocode'
 import { ensureProducerForTypedInstalacao } from '../../utils/ensureProducerForInstalacao'
+import { enrichProducerCadastroFromComprador } from '../../utils/enrichProducerCadastro'
+import {
+  PRODUTOR_CADASTRO_DOC_KEYS,
+  PRODUTOR_CADASTRO_DOC_LABELS,
+  PRODUTOR_CADASTRO_ACCEPT,
+  emptyCadastroDocsState,
+  isAllowedProducerCadastroFile,
+} from '../../constants/producerCadastroDocs'
+import { storageErrorMessagePT } from '../../utils/firebaseStorageErrors'
 
 const TIPO_PEDIDO_OPTIONS = [
   { value: PEDIDO_TIPO.INSTALACAO, label: 'Instalação' },
@@ -36,6 +45,9 @@ export default function NovoPedido() {
   const [produtores, setProdutores] = useState([])
   const [saving, setSaving] = useState(false)
   const [reverseGeoBusy, setReverseGeoBusy] = useState(false)
+  const [bankDetailsText, setBankDetailsText] = useState('')
+  const [producerPhoneCadastro, setProducerPhoneCadastro] = useState('')
+  const [cadastroFiles, setCadastroFiles] = useState(() => emptyCadastroDocsState())
 
   const isInstalacao = tipoPedido === PEDIDO_TIPO.INSTALACAO
   const nomeRegiaoDoCadastro = !!producerCadastroId
@@ -70,6 +82,40 @@ export default function NovoPedido() {
       setRegion('')
     }
   }, [producerCadastroId, produtores, isInstalacao])
+
+  useEffect(() => {
+    if (isInstalacao && !producerCadastroId) return
+    setCadastroFiles(emptyCadastroDocsState())
+    setBankDetailsText('')
+    setProducerPhoneCadastro('')
+  }, [isInstalacao, producerCadastroId])
+
+  function addCadastroFiles(categoriaKey, fileList) {
+    const incoming = Array.from(fileList || [])
+    if (incoming.length === 0) return
+    const rejected = []
+    const ok = []
+    for (const f of incoming) {
+      if (isAllowedProducerCadastroFile(f)) ok.push(f)
+      else rejected.push(f.name)
+    }
+    if (rejected.length) {
+      toast.error(`Formato não aceite (use PNG, JPG ou PDF): ${rejected.slice(0, 3).join(', ')}${rejected.length > 3 ? '…' : ''}`)
+    }
+    if (!ok.length) return
+    setCadastroFiles((prev) => ({
+      ...prev,
+      [categoriaKey]: [...(prev[categoriaKey] || []), ...ok],
+    }))
+  }
+
+  function removeCadastroFile(categoriaKey, index) {
+    setCadastroFiles((prev) => {
+      const list = [...(prev[categoriaKey] || [])]
+      list.splice(index, 1)
+      return { ...prev, [categoriaKey]: list }
+    })
+  }
 
   const producerOptionsInstalacao = [
     { value: '', label: '— Novo nome: cria produtor no cadastro ao enviar —' },
@@ -150,6 +196,11 @@ export default function NovoPedido() {
           address: address.trim(),
           createdByUserId: profile.id,
         })
+        await enrichProducerCadastroFromComprador(finalProducerId, {
+          phone: producerPhoneCadastro,
+          bankDetailsText,
+          filesByCategory: cadastroFiles,
+        })
       }
 
       await addDoc(collection(db, 'pedidos'), {
@@ -173,8 +224,9 @@ export default function NovoPedido() {
       })
       toast.success('Pedido criado com sucesso.')
       navigate('/comprador')
-    } catch {
-      toast.error('Não foi possível guardar o pedido.')
+    } catch (err) {
+      console.error(err)
+      toast.error(storageErrorMessagePT(err) || 'Não foi possível guardar o pedido.')
     } finally {
       setSaving(false)
     }
@@ -371,6 +423,72 @@ export default function NovoPedido() {
                 {lat != null && lng != null ? `Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)}` : 'Sem coordenadas'}
               </p>
             </div>
+            {isInstalacao && !producerCadastroId ? (
+              <div className="sm:col-span-2 space-y-4 rounded-xl border border-blue-100 bg-blue-50/40 p-4">
+                <p className="text-sm font-semibold text-slate-900">Documentos opcionais (novo produtor)</p>
+                <p className="text-xs text-slate-600">
+                  Pode anexar quantos ficheiros quiser (PNG, JPG ou PDF) por categoria. Os dados ficam no cadastro do
+                  produtor para o gestor consultar.
+                </p>
+                <div>
+                  <label className="text-sm font-medium text-slate-700">Dados bancários (texto livre)</label>
+                  <textarea
+                    value={bankDetailsText}
+                    onChange={(e) => setBankDetailsText(e.target.value)}
+                    rows={2}
+                    className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+                    placeholder="Banco, agência, conta, titular, PIX…"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-slate-700">Telefone do produtor</label>
+                  <input
+                    type="tel"
+                    inputMode="tel"
+                    value={producerPhoneCadastro}
+                    onChange={(e) => setProducerPhoneCadastro(e.target.value)}
+                    className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+                    placeholder="Ex.: 79 9 9999-9999"
+                  />
+                </div>
+                {PRODUTOR_CADASTRO_DOC_KEYS.map((key) => (
+                  <div key={key} className="rounded-lg border border-slate-200 bg-white/90 p-3">
+                    <label className="text-sm font-medium text-slate-800">
+                      {PRODUTOR_CADASTRO_DOC_LABELS[key]}
+                    </label>
+                    <input
+                      type="file"
+                      multiple
+                      accept={PRODUTOR_CADASTRO_ACCEPT}
+                      className="mt-2 block w-full text-xs text-slate-600 file:mr-2 file:rounded file:border-0 file:bg-blue-600 file:px-2 file:py-1 file:text-xs file:font-medium file:text-white"
+                      onChange={(e) => {
+                        addCadastroFiles(key, e.target.files)
+                        e.target.value = ''
+                      }}
+                    />
+                    {(cadastroFiles[key] || []).length > 0 ? (
+                      <ul className="mt-2 space-y-1 text-xs text-slate-700">
+                        {cadastroFiles[key].map((f, idx) => (
+                          <li key={`${key}-${idx}-${f.name}`} className="flex items-center justify-between gap-2">
+                            <span className="min-w-0 truncate" title={f.name}>
+                              {f.name}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => removeCadastroFile(key, idx)}
+                              className="shrink-0 text-red-700 underline"
+                            >
+                              Remover
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
             <div className="sm:col-span-2">
               <label className="text-sm font-medium text-slate-700">Notas do comprador</label>
               <textarea

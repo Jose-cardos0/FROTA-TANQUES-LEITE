@@ -25,6 +25,11 @@ export function romaneioFotoStoragePath(romaneioId, itemId, index, file) {
   return `romaneios/${romaneioId}/${itemId}/${newUploadId()}_${Date.now()}_${index}_${safe}`
 }
 
+export function producerCadastroDocStoragePath(producerId, categoriaKey, file) {
+  const safe = sanitizeStorageFileName(file?.name)
+  return `produtores/${producerId}/cadastro/${categoriaKey}/${newUploadId()}_${Date.now()}_${safe}`
+}
+
 export async function uploadFile(path, file) {
   const r = ref(storage, path)
   const metadata =
