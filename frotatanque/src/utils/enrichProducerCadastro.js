@@ -7,7 +7,12 @@ import { PRODUTOR_CADASTRO_DOC_KEYS } from '../constants/producerCadastroDocs'
  * Anexa ficheiros e/ou texto opcional ao documento `produtores/{producerId}`.
  * Ficheiros são acrescentados aos arrays existentes em `cadastroDocs`.
  */
-export async function enrichProducerCadastroFromComprador(producerId, { phone, bankDetailsText, filesByCategory }) {
+export async function enrichProducerCadastroFromComprador(producerId, {
+  phone,
+  bankDetailsText,
+  acessibilidadeText,
+  filesByCategory,
+}) {
   if (!producerId) return
   const pref = doc(db, 'produtores', producerId)
   const snap = await getDoc(pref)
@@ -40,13 +45,15 @@ export async function enrichProducerCadastroFromComprador(producerId, { phone, b
 
   const phoneT = phone != null ? String(phone).trim() : ''
   const bankT = bankDetailsText != null ? String(bankDetailsText).trim() : ''
+  const accT = acessibilidadeText != null ? String(acessibilidadeText).trim() : ''
 
-  if (!uploadedAny && !phoneT && !bankT) return
+  if (!uploadedAny && !phoneT && !bankT && !accT) return
 
   const payload = { updatedAt: serverTimestamp() }
   if (uploadedAny) payload.cadastroDocs = cadastroDocs
   if (phoneT) payload.phone = phoneT
   if (bankT) payload.bankDetailsText = bankT
+  if (accT) payload.acessibilidadeText = accT
 
   await updateDoc(pref, payload)
 }

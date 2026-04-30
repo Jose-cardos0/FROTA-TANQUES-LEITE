@@ -43,8 +43,9 @@ export default function EditarPedido() {
 
   const isInstalacao = tipoPedido === PEDIDO_TIPO.INSTALACAO
   const isRemocao = tipoPedido === PEDIDO_TIPO.REMOCAO
-  const isTrocaOuManutencao =
-    tipoPedido === PEDIDO_TIPO.TROCA || tipoPedido === PEDIDO_TIPO.MANUTENCAO
+  const isTroca = tipoPedido === PEDIDO_TIPO.TROCA
+  const isManutencao = tipoPedido === PEDIDO_TIPO.MANUTENCAO
+  const podeNomeManual = isInstalacao || isRemocao || isTroca
   const nomeRegiaoDoCadastro = !!producerCadastroId
 
   useEffect(() => {
@@ -54,11 +55,11 @@ export default function EditarPedido() {
   }, [])
 
   useEffect(() => {
-    if (isTrocaOuManutencao && !producerCadastroId) {
+    if (isManutencao && !producerCadastroId) {
       setProducerName('')
       setRegion('')
     }
-  }, [isTrocaOuManutencao, producerCadastroId])
+  }, [isManutencao, producerCadastroId])
 
   useEffect(() => {
     const prev = prevProducerCadastroRef.current
@@ -71,11 +72,11 @@ export default function EditarPedido() {
       }
       return
     }
-    if (prev && !producerCadastroId && (isInstalacao || isRemocao)) {
+    if (prev && !producerCadastroId && (isInstalacao || isRemocao || isTroca)) {
       setProducerName('')
       setRegion('')
     }
-  }, [producerCadastroId, produtores, isInstalacao, isRemocao])
+  }, [producerCadastroId, produtores, isInstalacao, isRemocao, isTroca])
 
   const producerOptionsInstalacao = [
     { value: '', label: '— Novo nome: cria produtor no cadastro ao guardar —' },
@@ -162,7 +163,7 @@ export default function EditarPedido() {
       toast.error('Indique o endereço.')
       return
     }
-    if (isTrocaOuManutencao) {
+    if (isManutencao) {
       if (!producerCadastroId) {
         toast.error('Selecione o produtor no cadastro Natville.')
         return
@@ -170,7 +171,7 @@ export default function EditarPedido() {
     } else if (isInstalacao && !producerCadastroId && !producerName.trim()) {
       toast.error('Indique o nome do produtor ou selecione um produtor no cadastro.')
       return
-    } else if (isRemocao && !producerCadastroId) {
+    } else if ((isRemocao || isTroca) && !producerCadastroId) {
       if (!producerName.trim() || !region.trim()) {
         toast.error('Selecione um produtor no cadastro ou indique nome e região do produtor.')
         return
@@ -219,6 +220,15 @@ export default function EditarPedido() {
           address: address.trim(),
           createdByUserId: profile.id,
           source: 'comprador_remocao',
+        })
+      } else if (isTroca && !producerCadastroId) {
+        resolvedProducerId = await ensureProducerForTypedInstalacao({
+          produtores,
+          producerName: producerName.trim(),
+          region: region.trim(),
+          address: address.trim(),
+          createdByUserId: profile.id,
+          source: 'comprador_troca',
         })
       }
 
@@ -280,10 +290,9 @@ export default function EditarPedido() {
       <div>
         <PageTitleWithHelp title="Editar pedido" tooltipId="help-comprador-editar-pedido">
           <p>
-            Altere dados, mapa ou notas enquanto o pedido ainda estiver editável. <strong>Instalação</strong> permite
-            nome livre ou cadastro; <strong>troca e manutenção</strong> exigem produtor no cadastro; em{' '}
-            <strong>remoção</strong> pode usar cadastro ou nome e região escritos. O endereço é obrigatório. Cada gravação
-            fica no <strong>histórico</strong> (visível para si e para o gestor).
+            Altere dados, mapa ou notas enquanto o pedido ainda estiver editável. <strong>Instalação, troca e remoção</strong>{' '}
+            permitem cadastro opcional ou nome e região escritos; <strong>manutenção</strong> exige produtor no cadastro. O
+            endereço é obrigatório. Cada gravação fica no <strong>histórico</strong> (visível para si e para o gestor).
           </p>
         </PageTitleWithHelp>
       </div>
@@ -316,7 +325,7 @@ export default function EditarPedido() {
           <div className="sm:col-span-2">
             <label className="text-sm font-medium text-slate-700">
               Produtor no cadastro Natville
-              {isInstalacao || isRemocao ? ' (opcional)' : ' *'}
+              {podeNomeManual ? ' (opcional)' : ' *'}
             </label>
             <SearchableSelect
               value={producerCadastroId}
@@ -324,14 +333,14 @@ export default function EditarPedido() {
               options={
                 isInstalacao
                   ? producerOptionsInstalacao
-                  : isRemocao
+                  : podeNomeManual
                     ? producerOptionsRemocao
                     : producerOptionsCadastroObrigatorio
               }
               placeholder={
                 isInstalacao
                   ? '— Opcional —'
-                  : isRemocao
+                  : podeNomeManual
                     ? '— Opcional: escolher no cadastro —'
                     : '— Escolher —'
               }
@@ -339,7 +348,7 @@ export default function EditarPedido() {
               className="mt-1"
             />
           </div>
-          {isInstalacao || isRemocao ? (
+          {podeNomeManual ? (
             <div className="sm:col-span-2">
               <label className="text-sm font-medium text-slate-700">Nome do produtor *</label>
               <input
@@ -357,11 +366,11 @@ export default function EditarPedido() {
             <label className="text-sm font-medium text-slate-700">Região *</label>
             <input
               required
-              readOnly={nomeRegiaoDoCadastro || isTrocaOuManutencao}
+              readOnly={nomeRegiaoDoCadastro || isManutencao}
               value={region}
               onChange={(e) => setRegion(e.target.value)}
               className={`mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 ${
-                nomeRegiaoDoCadastro || isTrocaOuManutencao
+                nomeRegiaoDoCadastro || isManutencao
                   ? 'cursor-not-allowed bg-slate-100 text-slate-800'
                   : ''
               }`}

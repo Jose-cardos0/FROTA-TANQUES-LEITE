@@ -22,6 +22,7 @@ import {
   PEDIDO_TIPO_LABELS,
   PEDIDO_STATUS_LABELS,
   ITEM_ROMANEIO_STATUS,
+  ROMANEIO_STATUS,
 } from '../../constants/roles'
 import { revertTanqueRomaneioPendente } from '../../services/tanqueLifecycle'
 import MapReadOnly from '../../components/MapReadOnly'
@@ -67,6 +68,7 @@ export default function GestorPedidos() {
   const [pedidos, setPedidos] = useState([])
   const [userMap, setUserMap] = useState({})
   const [tanques, setTanques] = useState([])
+  const [romaneios, setRomaneios] = useState([])
   const [loading, setLoading] = useState(true)
   const [deletingId, setDeletingId] = useState(null)
   const [mapModal, setMapModal] = useState(null)
@@ -97,6 +99,12 @@ export default function GestorPedidos() {
   }, [])
 
   useEffect(() => {
+    return onSnapshot(collection(db, 'romaneios'), (s) =>
+      setRomaneios(s.docs.map((d) => ({ id: d.id, ...d.data() }))),
+    )
+  }, [])
+
+  useEffect(() => {
     return onSnapshot(collection(db, 'users'), (s) => {
       const m = {}
       for (const d of s.docs) {
@@ -113,7 +121,22 @@ export default function GestorPedidos() {
     return m
   }, [tanques])
 
+  /** Pedidos que constam de algum romaneio cujo estado ainda não é «concluído». */
+  const pedidoIdsRomaneioNaoConcluido = useMemo(() => {
+    const ids = new Set()
+    for (const r of romaneios) {
+      if (r.status === ROMANEIO_STATUS.CONCLUIDO) continue
+      for (const it of r.itens || []) {
+        if (it.pedidoId) ids.add(it.pedidoId)
+      }
+    }
+    return ids
+  }, [romaneios])
+
   const filtered = useMemo(() => {
+    if (tab === 'romaneio_aberto') {
+      return pedidos.filter((p) => pedidoIdsRomaneioNaoConcluido.has(p.id))
+    }
     if (tab === 'abertos') {
       return pedidos.filter((p) =>
         [
@@ -130,7 +153,7 @@ export default function GestorPedidos() {
       return pedidos.filter((p) => p.status === PEDIDO_STATUS.CONCLUIDO)
     }
     return pedidos
-  }, [pedidos, tab])
+  }, [pedidos, tab, pedidoIdsRomaneioNaoConcluido])
 
   const totalPages = useMemo(() => {
     return Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
@@ -348,6 +371,7 @@ export default function GestorPedidos() {
 
       <div className="flex flex-wrap gap-2">
         {[
+          { id: 'romaneio_aberto', label: 'Romaneios em aberto' },
           { id: 'abertos', label: 'Abertos / em processamento' },
           { id: 'atualizados', label: 'Atualizados pelo comprador' },
           { id: 'finalizados', label: 'Finalizados (eletricista)' },

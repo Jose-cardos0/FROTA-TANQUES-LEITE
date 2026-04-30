@@ -12,7 +12,7 @@ import { reverseGeocodeLatLng } from '../../utils/reverseGeocode'
 import { ensureProducerForTypedInstalacao } from '../../utils/ensureProducerForInstalacao'
 import { enrichProducerCadastroFromComprador } from '../../utils/enrichProducerCadastro'
 import {
-  PRODUTOR_CADASTRO_DOC_KEYS,
+  PRODUTOR_CADASTRO_DOC_KEYS_TERRENO,
   PRODUTOR_CADASTRO_DOC_LABELS,
   PRODUTOR_CADASTRO_ACCEPT,
   emptyCadastroDocsState,
@@ -45,14 +45,15 @@ export default function NovoPedido() {
   const [produtores, setProdutores] = useState([])
   const [saving, setSaving] = useState(false)
   const [reverseGeoBusy, setReverseGeoBusy] = useState(false)
-  const [bankDetailsText, setBankDetailsText] = useState('')
+  const [acessibilidadeText, setAcessibilidadeText] = useState('')
   const [producerPhoneCadastro, setProducerPhoneCadastro] = useState('')
   const [cadastroFiles, setCadastroFiles] = useState(() => emptyCadastroDocsState())
 
   const isInstalacao = tipoPedido === PEDIDO_TIPO.INSTALACAO
   const isRemocao = tipoPedido === PEDIDO_TIPO.REMOCAO
-  const isTrocaOuManutencao =
-    tipoPedido === PEDIDO_TIPO.TROCA || tipoPedido === PEDIDO_TIPO.MANUTENCAO
+  const isTroca = tipoPedido === PEDIDO_TIPO.TROCA
+  const isManutencao = tipoPedido === PEDIDO_TIPO.MANUTENCAO
+  const podeNomeManual = isInstalacao || isRemocao || isTroca
   const nomeRegiaoDoCadastro = !!producerCadastroId
   const prevProducerCadastroRef = useRef(producerCadastroId)
 
@@ -63,11 +64,11 @@ export default function NovoPedido() {
   }, [])
 
   useEffect(() => {
-    if (isTrocaOuManutencao && !producerCadastroId) {
+    if (isManutencao && !producerCadastroId) {
       setProducerName('')
       setRegion('')
     }
-  }, [isTrocaOuManutencao, producerCadastroId])
+  }, [isManutencao, producerCadastroId])
 
   useEffect(() => {
     const prev = prevProducerCadastroRef.current
@@ -80,16 +81,16 @@ export default function NovoPedido() {
       }
       return
     }
-    if (prev && !producerCadastroId && (isInstalacao || isRemocao)) {
+    if (prev && !producerCadastroId && (isInstalacao || isRemocao || isTroca)) {
       setProducerName('')
       setRegion('')
     }
-  }, [producerCadastroId, produtores, isInstalacao, isRemocao])
+  }, [producerCadastroId, produtores, isInstalacao, isRemocao, isTroca])
 
   useEffect(() => {
     if (isInstalacao && !producerCadastroId) return
     setCadastroFiles(emptyCadastroDocsState())
-    setBankDetailsText('')
+    setAcessibilidadeText('')
     setProducerPhoneCadastro('')
   }, [isInstalacao, producerCadastroId])
 
@@ -176,7 +177,7 @@ export default function NovoPedido() {
       toast.error('Indique o endereço.')
       return
     }
-    if (isTrocaOuManutencao) {
+    if (isManutencao) {
       if (!producerCadastroId) {
         toast.error('Selecione o produtor no cadastro Natville.')
         return
@@ -184,7 +185,7 @@ export default function NovoPedido() {
     } else if (isInstalacao && !producerCadastroId && !producerName.trim()) {
       toast.error('Indique o nome do produtor ou selecione um produtor no cadastro.')
       return
-    } else if (isRemocao && !producerCadastroId) {
+    } else if ((isRemocao || isTroca) && !producerCadastroId) {
       if (!producerName.trim() || !region.trim()) {
         toast.error('Selecione um produtor no cadastro ou indique nome e região do produtor.')
         return
@@ -215,7 +216,7 @@ export default function NovoPedido() {
         })
         await enrichProducerCadastroFromComprador(finalProducerId, {
           phone: producerPhoneCadastro,
-          bankDetailsText,
+          acessibilidadeText,
           filesByCategory: cadastroFiles,
         })
       } else if (isRemocao && !producerCadastroId) {
@@ -226,6 +227,15 @@ export default function NovoPedido() {
           address: address.trim(),
           createdByUserId: profile.id,
           source: 'comprador_remocao',
+        })
+      } else if (isTroca && !producerCadastroId) {
+        finalProducerId = await ensureProducerForTypedInstalacao({
+          produtores,
+          producerName: producerName.trim(),
+          region: region.trim(),
+          address: address.trim(),
+          createdByUserId: profile.id,
+          source: 'comprador_troca',
         })
       }
 
@@ -264,8 +274,8 @@ export default function NovoPedido() {
         <PageTitleWithHelp title="Novo pedido" tooltipId="help-comprador-novo-pedido">
           <p>
             <strong>Instalação</strong> costuma ser um <strong>novo produtor</strong>: pode escrever o nome e região (o
-            produtor é criado automaticamente no cadastro ao enviar o pedido) ou escolher alguém já no cadastro Natville.             <strong>Troca e manutenção</strong> exigem produtor no cadastro; em <strong>remoção</strong> pode escolher no
-            cadastro ou escrever nome e região (identificação no terreno). O <strong>gestor</strong> vê o pedido em aberto e
+            produtor é criado automaticamente no cadastro ao enviar o pedido) ou escolher alguém já no cadastro Natville.             <strong>Manutenção</strong> exige produtor no cadastro; em <strong>instalação, troca e remoção</strong> pode
+            escolher no cadastro ou escrever nome e região. O <strong>gestor</strong> vê o pedido em aberto e
             pode montar o romaneio; o <strong>eletricista</strong> usa o mapa, o endereço e as{' '}
             <strong>notas do comprador</strong> no terreno. O endereço é obrigatório; ao usar a localização atual,
             tentamos preencher o endereço automaticamente (OpenStreetMap).
@@ -342,7 +352,7 @@ export default function NovoPedido() {
             <div className="sm:col-span-2">
               <label className="text-sm font-medium text-slate-700">
                 Produtor no cadastro Natville
-                {isInstalacao || isRemocao ? ' (opcional)' : ' *'}
+                {podeNomeManual ? ' (opcional)' : ' *'}
               </label>
               <SearchableSelect
                 value={producerCadastroId}
@@ -350,14 +360,14 @@ export default function NovoPedido() {
                 options={
                   isInstalacao
                     ? producerOptionsInstalacao
-                    : isRemocao
+                    : podeNomeManual
                       ? producerOptionsRemocao
                       : producerOptionsCadastroObrigatorio
                 }
                 placeholder={
                   isInstalacao
                     ? '— Opcional —'
-                    : isRemocao
+                    : podeNomeManual
                       ? '— Opcional: escolher no cadastro —'
                       : '— Escolher —'
                 }
@@ -367,13 +377,13 @@ export default function NovoPedido() {
               <p className="mt-1 text-xs text-slate-500">
                 {isInstalacao
                   ? 'Se não escolher ninguém aqui, o nome e região que escrever abaixo passam a existir no cadastro de produtores ao criar o pedido (reutilizamos se já existir o mesmo nome e região).'
-                  : isRemocao
-                    ? 'Pode escolher alguém do cadastro ou escrever nome e região abaixo (ex.: produtor ainda não registado).'
-                    : 'Obrigatório para troca e manutenção — nome e região vêm do cadastro.'}
+                  : podeNomeManual
+                    ? 'Pode escolher alguém do cadastro ou escrever nome e região abaixo (ex.: nome ainda não igual ao cadastro).'
+                    : 'Obrigatório para manutenção — nome e região vêm do cadastro.'}
               </p>
             </div>
 
-            {isInstalacao || isRemocao ? (
+            {podeNomeManual ? (
               <div className="sm:col-span-2">
                 <label className="text-sm font-medium text-slate-700">Nome do produtor *</label>
                 <input
@@ -394,15 +404,14 @@ export default function NovoPedido() {
                   <p className="mt-1 text-xs text-slate-500">
                     Definido pelo cadastro — altere trocando a seleção acima.
                   </p>
-                ) : isRemocao ? (
-                  <p className="mt-1 text-xs text-slate-500">
-                    Obrigatório se não escolher produtor no cadastro — use o nome tal como deve aparecer no pedido de
-                    remoção.
-                  </p>
-                ) : (
+                ) : isInstalacao ? (
                   <p className="mt-1 text-xs text-slate-500">
                     Obrigatório se não escolher produtor no cadastro — será registado no cadastro ao enviar (ou ligado a um
                     já existente com o mesmo nome e região).
+                  </p>
+                ) : (
+                  <p className="mt-1 text-xs text-slate-500">
+                    Obrigatório se não escolher produtor no cadastro — indique o nome e a região como no pedido.
                   </p>
                 )}
               </div>
@@ -412,16 +421,16 @@ export default function NovoPedido() {
               <label className="text-sm font-medium text-slate-700">Região do produtor *</label>
               <input
                 required
-                readOnly={nomeRegiaoDoCadastro || isTrocaOuManutencao}
+                readOnly={nomeRegiaoDoCadastro || isManutencao}
                 value={region}
                 onChange={(e) => setRegion(e.target.value)}
                 className={`mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 ${
-                  nomeRegiaoDoCadastro || isTrocaOuManutencao
+                  nomeRegiaoDoCadastro || isManutencao
                     ? 'cursor-not-allowed bg-slate-100 text-slate-800'
                     : ''
                 }`}
                 title={
-                  nomeRegiaoDoCadastro || isTrocaOuManutencao
+                  nomeRegiaoDoCadastro || isManutencao
                     ? 'Preenchido automaticamente a partir do cadastro Natville.'
                     : undefined
                 }
@@ -478,15 +487,39 @@ export default function NovoPedido() {
                   Pode anexar quantos ficheiros quiser (PNG, JPG ou PDF) por categoria. Os dados ficam no cadastro do
                   produtor para o gestor consultar.
                 </p>
-                <div>
-                  <label className="text-sm font-medium text-slate-700">Dados bancários (texto livre)</label>
-                  <textarea
-                    value={bankDetailsText}
-                    onChange={(e) => setBankDetailsText(e.target.value)}
-                    rows={2}
-                    className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
-                    placeholder="Banco, agência, conta, titular, PIX…"
+                <div className="rounded-lg border border-slate-200 bg-white/90 p-3">
+                  <label className="text-sm font-medium text-slate-800">
+                    {PRODUTOR_CADASTRO_DOC_LABELS.dadosBancarios}
+                  </label>
+                
+                  <input
+                    type="file"
+                    multiple
+                    accept={PRODUTOR_CADASTRO_ACCEPT}
+                    className="mt-2 block w-full text-xs text-slate-600 file:mr-2 file:rounded file:border-0 file:bg-blue-600 file:px-2 file:py-1 file:text-xs file:font-medium file:text-white"
+                    onChange={(e) => {
+                      addCadastroFiles('dadosBancarios', e.target.files)
+                      e.target.value = ''
+                    }}
                   />
+                  {(cadastroFiles.dadosBancarios || []).length > 0 ? (
+                    <ul className="mt-2 space-y-1 text-xs text-slate-700">
+                      {cadastroFiles.dadosBancarios.map((f, idx) => (
+                        <li key={`dadosBancarios-${idx}-${f.name}`} className="flex items-center justify-between gap-2">
+                          <span className="min-w-0 truncate" title={f.name}>
+                            {f.name}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => removeCadastroFile('dadosBancarios', idx)}
+                            className="shrink-0 text-red-700 underline"
+                          >
+                            Remover
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
                 </div>
                 <div>
                   <label className="text-sm font-medium text-slate-700">Telefone do produtor</label>
@@ -499,7 +532,7 @@ export default function NovoPedido() {
                     placeholder="Ex.: 79 9 9999-9999"
                   />
                 </div>
-                {PRODUTOR_CADASTRO_DOC_KEYS.map((key) => (
+                {PRODUTOR_CADASTRO_DOC_KEYS_TERRENO.map((key) => (
                   <div key={key} className="rounded-lg border border-slate-200 bg-white/90 p-3">
                     <label className="text-sm font-medium text-slate-800">
                       {PRODUTOR_CADASTRO_DOC_LABELS[key]}
@@ -534,6 +567,16 @@ export default function NovoPedido() {
                     ) : null}
                   </div>
                 ))}
+                <div>
+                  <label className="text-sm font-medium text-slate-700">Acessibilidade (texto)</label>
+                  <textarea
+                    value={acessibilidadeText}
+                    onChange={(e) => setAcessibilidadeText(e.target.value)}
+                    rows={3}
+                    className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+                    placeholder="Descreva o acesso à propriedade, rampas, obstáculos…"
+                  />
+                </div>
               </div>
             ) : null}
 

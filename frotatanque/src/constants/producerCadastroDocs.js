@@ -3,14 +3,17 @@ export const PRODUTOR_CADASTRO_DOC_KEYS = [
   'localizacaoTanque',
   'rgCpf',
   'itrSanitario',
-  'acessibilidade',
+  'dadosBancarios',
 ]
+
+/** Subconjunto só para fotos de campo / documentos (exclui anexos bancários — tratados junto ao texto bancário na UI). */
+export const PRODUTOR_CADASTRO_DOC_KEYS_TERRENO = ['localizacaoTanque', 'rgCpf', 'itrSanitario']
 
 export const PRODUTOR_CADASTRO_DOC_LABELS = {
   localizacaoTanque: 'Foto da localização onde vai ficar o tanque',
   rgCpf: 'Foto do RG e CPF (frente e verso)',
   itrSanitario: 'Foto do ITR e ficha sanitária',
-  acessibilidade: 'Foto de acessibilidade',
+  dadosBancarios: 'Anexos de dados bancários (foto ou PDF)',
 }
 
 /** Extensões e tipos MIME aceites para anexos de cadastro. */
@@ -22,7 +25,7 @@ export function emptyCadastroDocsState() {
     localizacaoTanque: [],
     rgCpf: [],
     itrSanitario: [],
-    acessibilidade: [],
+    dadosBancarios: [],
   }
 }
 
